@@ -16,6 +16,7 @@ import org.clapper.argot._
 import rewriting.InferNDRange
 import rewriting.utils.Utils
 import ExpressionFilter.Status.Success
+import exploration.ParameterRewrite.{settings, settingsFile}
 
 import scala.collection.immutable.Map
 import scala.io.Source
@@ -25,12 +26,12 @@ import scala.io.Source
   */
 object TunerRewrite {
 
-  private val logger = Logger(this.getClass)
+  //define objects attributes
+  private val logger = Logger(this.getClass)  //helps us logging stuff
+  private var topFolder = ""  //TODO what exactly is that path?
+  private val parser = new ArgotParser("TunerRewrite")  //Define the commandline arg parser
 
-  private var topFolder = ""
-
-  private val parser = new ArgotParser("TunerRewrite")
-
+  //help param
   parser.flag[Boolean](List("h", "help"),
     "Show this message.") {
     (sValue, _) =>
@@ -38,6 +39,7 @@ object TunerRewrite {
       sValue
   }
 
+  //input file param. This file contains the
   private val input = parser.parameter[String]("input",
     "Input file containing the lambda to use for rewriting",
     optional = false) {
@@ -54,6 +56,20 @@ object TunerRewrite {
   private val globalSize = parser.option[Int](List("globalSize"), "n",
     "")
 
+  private val settingsFile = parser.option[String](List("f", "file"), "name",
+    "The settings file to use."
+  ) {
+    (s, _) =>
+      val file = new File(s)
+      if (!file.exists)
+        parser.usage(s"Settings file $file doesn't exist.")
+      s
+  }
+
+  private var settings = Settings()
+
+  private var lambdaFilename = ""
+
   def main(args: Array[String]): Unit = {
 
     try {
@@ -63,6 +79,8 @@ object TunerRewrite {
       val inputArgument = input.value.get
 
       topFolder = Paths.get(inputArgument).toString
+
+      settings = ParseSettings(settingsFile.value)
 
       logger.info(s"Arguments: ${args.mkString(" ")}")
 
