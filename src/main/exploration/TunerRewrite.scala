@@ -31,6 +31,8 @@ object TunerRewrite {
   private var topFolder = ""  //TODO what exactly is that path?
   private val parser = new ArgotParser("TunerRewrite")  //Define the commandline arg parser
 
+
+
   //help param
   parser.flag[Boolean](List("h", "help"),
     "Show this message.") {
@@ -74,6 +76,8 @@ object TunerRewrite {
 
     try {
 
+
+
       parser.parse(args)
 
       val inputArgument = input.value.get
@@ -84,27 +88,56 @@ object TunerRewrite {
 
       logger.info(s"Arguments: ${args.mkString(" ")}")
 
+      println("test")
+
       // list all the high level expression
       val all_files = Source.fromFile(s"$topFolder/index").getLines().toList
+      println("all_files: " + all_files)
+
       val highLevelCount = all_files.size
+      println("all_files.count: " + highLevelCount)
+
+
 
       val parentFolder = Paths.get(topFolder).toAbsolutePath.getParent
+      println("parentFolder: " + parentFolder)
+
+
 
       var expr_counter = 0
-      all_files.foreach(filename => {
 
+      //Für jede HighLevelExpression
+      all_files.foreach(filename => {
+        //filename = highLevelHash
+
+        //stencil1DLower / highLevelHash
+        //TopOrdner für LowLevelExp
         val fullFilename = parentFolder + "/" + filename
 
+
+        println("fullFilename: " + fullFilename)
+
+
+        //Gibt einen Ordner für lowLevelExp für diese HighLevelExp
         if (Files.exists(Paths.get(fullFilename))) {
+          println("File bei fullFilename existiert")
+
           val high_level_hash = filename.split("/").last
-          expr_counter = expr_counter + 1
+          expr_counter = expr_counter + 1   //Bei welcher HighLevelExp sind wir gerade
           println(s"High-level expression : $expr_counter / $highLevelCount")
 
           try {
+            println("try")
 
+            //aktuelle
             val high_level_expr_orig = readLambdaFromFile(fullFilename)
+            println("HighLevelExp: " + high_level_expr_orig)
+
+
 
             val vars = high_level_expr_orig.getVarsInParams()
+            println("vars: " + vars)
+
 
             //TODO das muss wohl auch noch anders
             val st = createValueMap(high_level_expr_orig)
