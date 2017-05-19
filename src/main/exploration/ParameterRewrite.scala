@@ -189,7 +189,10 @@ object ParameterRewrite {
                       val rangeList = if (exploreNDRange.value.isDefined)
                         computeValidNDRanges(expr)
                       else
-                        Seq(InferNDRange(expr))
+                        Seq((NDRange(2,1,1),NDRange(32,1,1)))
+                        //Seq(InferNDRange(expr))
+
+                      println("rangeList: "+rangeList)
 
                       logger.debug(rangeList.length + " generated NDRanges")
 
