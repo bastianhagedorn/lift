@@ -86,10 +86,11 @@ class SaveOpenCL(
     val substitutionMap = tuple._2
     val ranges = tuple._3
 
-    if(ParameterRewrite.exploreNDRange.value.isDefined)
-      ranges match { case (l, g) => local = l; global = g }
-    else
-      InferNDRange(lambda) match { case (l, g) => local = l; global = g }
+    //if(ParameterRewrite.exploreNDRange.value.isDefined)
+    ranges match { case (l, g) => local = l; global = g }
+    //else
+    //  InferNDRange(lambda) match { case (l, g) => local = l; global = g }
+    //Das ist Quatsch! ...glaube ich...
 
     val code = if(ParameterRewrite.disableNDRangeInjection.value.isDefined)
       Compile(lambda)

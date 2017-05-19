@@ -8,7 +8,7 @@ import com.typesafe.scalalogging.Logger
 import exploration.ParameterSearch.SubstitutionMap
 import ir.ast.{Expr, FunCall, Lambda}
 import ir.{Type, TypeChecker}
-import lift.arithmetic.{ArithExpr, Cst}
+import lift.arithmetic.{?, ArithExpr, Cst}
 import opencl.executor.Eval
 import opencl.generator.NDRange
 import opencl.ir.pattern._
@@ -189,7 +189,8 @@ object ParameterRewrite {
                       val rangeList = if (exploreNDRange.value.isDefined)
                         computeValidNDRanges(expr)
                       else
-                        Seq((NDRange(2,1,1),NDRange(32,1,1)))
+                        //Keine weiß was es tut aber es ist wichtig!
+                        Seq((NDRange(?,1,1),NDRange(32,1,1)))
                         //Seq(InferNDRange(expr))
 
                       println("rangeList: "+rangeList)
