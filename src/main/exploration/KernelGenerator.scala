@@ -5,18 +5,17 @@ import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.typesafe.scalalogging.Logger
+import exploration.ExpressionFilter.Status.Success
 import exploration.ParameterSearch.SubstitutionMap
 import ir.ast.{Expr, FunCall, Lambda}
 import ir.{Type, TypeChecker}
-import lift.arithmetic.{?, ArithExpr, Cst}
+import lift.arithmetic.{ArithExpr, Cst}
 import opencl.executor.Eval
 import opencl.generator.NDRange
 import opencl.ir.pattern._
 import org.clapper.argot.ArgotConverters._
 import org.clapper.argot._
-import rewriting.InferNDRange
 import rewriting.utils.Utils
-import ExpressionFilter.Status.Success
 
 import scala.collection.immutable.Map
 import scala.io.Source
@@ -27,7 +26,7 @@ import scala.util.Random
   * This main currently runs a parameter space exploration over the
   * serialized low level expressions.
   */
-object ParameterRewrite {
+object KernelGenerator {
 
   private val logger = Logger(this.getClass)
 
@@ -117,9 +116,14 @@ object ParameterRewrite {
       val parentFolder = Paths.get(topFolder).toAbsolutePath.getParent
 
       var expr_counter = 0
-      all_files.foreach(filename => {
+      var filename = all_files.last
+      //for every HighLevelExp:
+      //all_files.foreach(filename => {
 
+        //path to the HighLevelExp.
         val fullFilename = parentFolder + "/" + filename
+        println("fullFilename: " + fullFilename)
+
 
         if (Files.exists(Paths.get(fullFilename))) {
           val high_level_hash = filename.split("/").last
@@ -129,7 +133,7 @@ object ParameterRewrite {
           try {
 
             val high_level_expr_orig = readLambdaFromFile(fullFilename)
-
+            println("high_level_expr_orig: " + high_level_expr_orig)
             val vars = high_level_expr_orig.getVarsInParams()
 
             val combinations = settings.inputCombinations
@@ -165,8 +169,9 @@ object ParameterRewrite {
 
               val parList = if (sequential.value.isDefined) low_level_expr_list else low_level_expr_list.par
 
-              parList.foreach(low_level_filename => {
-
+              //second loop, for every Low Level Exp
+              //parList.foreach(low_level_filename => {
+              var low_level_filename = parList.last
                 try {
 
                   val low_level_hash = low_level_filename.split("/").last
@@ -192,7 +197,7 @@ object ParameterRewrite {
                         Seq((NDRange(32,1,1),NDRange(32,1,1)))
                         //Seq(InferNDRange(expr))
 
-                        println("rangeList: "+rangeList)
+                        //println("rangeList: "+rangeList)
 
                         logger.debug(rangeList.length + " generated NDRanges")
 
@@ -248,14 +253,14 @@ object ParameterRewrite {
                     // Failed reading file or similar.
                     logger.warn(t.toString)
                 }
-              })
+              //})
             }
           } catch {
             case t: Throwable =>
               logger.warn(t.toString)
           }
         }
-      })
+      //})
     } catch {
       case io: IOException =>
         logger.error(io.toString)
