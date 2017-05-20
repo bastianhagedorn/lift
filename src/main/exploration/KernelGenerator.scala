@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.typesafe.scalalogging.Logger
 import exploration.ExpressionFilter.Status.Success
 import exploration.ParameterSearch.SubstitutionMap
+import exploration.TunerRewrite.parser
 import ir.ast.{Expr, FunCall, Lambda}
 import ir.{Type, TypeChecker}
 import lift.arithmetic.{ArithExpr, Cst}
@@ -51,14 +52,21 @@ object KernelGenerator {
       s
   }
 
-  val exploreNDRange = parser.flag[Boolean](List("e", "exploreNDRange"),
-    "Additionally explore global and local sizes")
+  private val localSize = parser.option[NDRange](List("ls", "localSize"), "n",
+    "Comma separated local sizes"){
+    (s,opt)=>
+      //take the first 3 values, try to convert them to number and fill ones if there were less than 3 values
+      val localSizes = s.split(',').take(3).map(x=>x.toInt).padTo(3,1)
+      NDRange(localSizes(0),localSizes(1),localSizes(2))
+  }
 
-  val sampleNDRange = parser.option[Int](List("sampleNDRange"), "n",
-    "Randomly sample n combinations of global and local sizes (requires 'explore')")
+  private val globalSize = parser.option[NDRange](List("gs", "globalSize"), "n",
+    "Comma separated local sizes"){
+    (s,opt)=>
+      val localSizes = s.split(',').take(3).map(x=>x.toInt).padTo(3,1)
+      NDRange(localSizes(0),localSizes(1),localSizes(2))
+  }
 
-  val disableNDRangeInjection = parser.flag[Boolean](List("disableNDRangeInjection"),
-    "Don't inject NDRanges while compiling the OpenCL Kernel")
 
   private val sequential = parser.flag[Boolean](List("s", "seq", "sequential"),
     "Don't execute in parallel.")
@@ -85,9 +93,6 @@ object KernelGenerator {
     try {
 
       parser.parse(args)
-
-      if(exploreNDRange.value.isEmpty && sampleNDRange.value.isDefined)
-        throw new RuntimeException("'sample' is defined without enabling 'explore'")
 
       val inputArgument = input.value.get
 
@@ -191,10 +196,7 @@ object KernelGenerator {
                         val expr = low_level_factory(sizesForFilter ++ params)
                         TypeChecker(expr)
 
-                      val rangeList = if (exploreNDRange.value.isDefined)
-                        computeValidNDRanges(expr)
-                      else
-                        Seq((NDRange(32,1,1),NDRange(32,1,1)))
+                      val rangeList = Seq((localSize.value.get,globalSize.value.get))
                         //Seq(InferNDRange(expr))
 
                         //println("rangeList: "+rangeList)
@@ -214,11 +216,7 @@ object KernelGenerator {
                         //println("filtered: " + filtered)
 
                         logger.debug(filtered.length + " NDRanges after filtering")
-                        val sampled = if (sampleNDRange.value.isDefined && filtered.nonEmpty) {
-                        Random.setSeed(0L) //always use the same seed
-                        Random.shuffle(filtered).take(sampleNDRange.value.get)
-                      } else
-                        filtered
+                        val sampled = filtered
 
                         val sampleStrings: Seq[String] = sampled.map(x => low_level_hash + "_" + x._2.mkString("_") +
                           "_" + x._3._1.toString.replace(",", "_") + "_" + x._3._2.toString.replace(",", "_"))
