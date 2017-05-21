@@ -96,21 +96,16 @@ object KernelGenerator {
 
       val inputArgument = input.value.get
 
-      //was:
-      //topFolder = Paths.get(inputArgument).toString
-      //println("topFolder: " + topFolder)
+      //we need the relative path from topfolder to the lambda
+      var lambdaPath = Paths.get(inputArgument).toAbsolutePath
+      var relativeLambdaPath = lambdaPath.toString.stripPrefix(lambdaPath.getParent.getParent.getParent.getParent.getParent + "/")
 
-      var lambdaPath = Paths.get(inputArgument).toString //new
       var highLevelName = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getFileName
-      println("highLevelName: " + highLevelName)
 
       topFolder = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.toString.stripSuffix("Lower")
 
-      /*
-      Scala files zu erzeugen interessiert uns erstmal nicht.
-      Sollte man das hier komplett löschen? Vielleicht wollen wir ja später doch Scala Code erzeugen :D
-      lambdaFilename = topFolder + "Scala/lambdaFile"
 
+      lambdaFilename = topFolder + "Scala/lambdaFile"
       if (generateScala.value.isDefined) {
         val f = new File(lambdaFilename)
         if (f.exists()) {
@@ -119,7 +114,6 @@ object KernelGenerator {
           s"mkdir -p ${topFolder}Scala".!
         }
       }
-      */
 
       settings = ParseSettings(settingsFile.value)
 
@@ -128,16 +122,10 @@ object KernelGenerator {
 
       // list all the high level expression
       val all_files = Source.fromFile(s"$topFolder/index").getLines().toList
-      println("all_files: " + all_files)
-      val highLevelCount = all_files.size
 
       val parentFolder = Paths.get(topFolder).toAbsolutePath.getParent
 
-      var expr_counter = 0
-
-
       var filename = ""
-
       //find corresponding HighLevel Exp.
       all_files.foreach(path => {
         if (Paths.get(path.mkString).getFileName.toString == highLevelName.toString) {
@@ -146,23 +134,16 @@ object KernelGenerator {
         }
       })
 
-      //for every HighLevelExp:
-      //all_files.foreach(filename => {
-
         //path to the HighLevelExp.
         val fullFilename = parentFolder + "/" + filename
-        println("fullFilename: " + fullFilename)
-
 
         if (Files.exists(Paths.get(fullFilename))) {
           val high_level_hash = filename.split("/").last
-          expr_counter = expr_counter + 1
-          println(s"High-level expression : $expr_counter / $highLevelCount")
 
           try {
 
+            //HighLevelExpr einlesen
             val high_level_expr_orig = readLambdaFromFile(fullFilename)
-            println("high_level_expr_orig: " + high_level_expr_orig)
             val vars = high_level_expr_orig.getVarsInParams()
 
             val combinations = settings.inputCombinations
@@ -184,23 +165,12 @@ object KernelGenerator {
             val substitutionCount = all_substitution_tables.size
             println(s"Found $substitutionCount valid parameter sets")
 
-            val loweredIndex = s"${topFolder}Lower/$high_level_hash/index"
-            if (Files.exists(Paths.get(loweredIndex))
-              && substitutionCount < 800000) {
 
-              val low_level_expr_list = Source.fromFile(loweredIndex).getLines().toList
 
-              val low_level_counter = new AtomicInteger()
-              val lowLevelCount = low_level_expr_list.size
               val propagation_counter = new AtomicInteger()
-              val propagationCount = lowLevelCount * substitutionCount
-              println(s"Found $lowLevelCount low level expressions")
+              val propagationCount = substitutionCount
 
-              val parList = if (sequential.value.isDefined) low_level_expr_list else low_level_expr_list.par
-
-              //second loop, for every Low Level Exp
-              //parList.foreach(low_level_filename => {
-              var low_level_filename = parList.last
+              var low_level_filename = relativeLambdaPath//parList.last
                 try {
 
                   val low_level_hash = low_level_filename.split("/").last
@@ -208,7 +178,6 @@ object KernelGenerator {
                   val low_level_str = readFromFile(fullLowLevelFilename)
                   val low_level_factory = Eval.getMethod(low_level_str)
 
-                  println(s"Low-level expression ${low_level_counter.incrementAndGet()} / $lowLevelCount")
                   println("Propagating parameters...")
 
                   val potential_expressions: Seq[(Lambda, Seq[ArithExpr], (NDRange, NDRange))] =
@@ -220,27 +189,16 @@ object KernelGenerator {
                         val expr = low_level_factory(sizesForFilter ++ params)
                         TypeChecker(expr)
 
-                      val rangeList = Seq((localSize.value.get,globalSize.value.get))
-                        //Seq(InferNDRange(expr))
+                        val rangeList = Seq((localSize.value.getOrElse(NDRange(1,1,1)),globalSize.value.getOrElse(NDRange(1,1,1))))
 
-                        //println("rangeList: "+rangeList)
-
-                        logger.debug(rangeList.length + " generated NDRanges")
+                        logger.debug(rangeList.length + " entered NDRanges")
 
 
-                        //ExpressionFilter discards all LS, but "?", just disable it
-                        val filtered: Seq[(Lambda, Seq[ArithExpr], (NDRange, NDRange))] =
+                        val sampled: Seq[(Lambda, Seq[ArithExpr], (NDRange, NDRange))] =
                           rangeList.flatMap {ranges =>
-                            //if (ExpressionFilter(expr, ranges, settings.searchParameters) == Success)
-                            //println("Expression Filter sagt: " +ExpressionFilter(expr, ranges, settings.searchParameters))
+                            //No filtering necessary, we trust Atf to find good & valid parameters
                             Some((low_level_factory(vars ++ params), params, ranges))
-                            //else
-                            //  None
                           }
-                        //println("filtered: " + filtered)
-
-                        logger.debug(filtered.length + " NDRanges after filtering")
-                        val sampled = filtered
 
                         val sampleStrings: Seq[String] = sampled.map(x => low_level_hash + "_" + x._2.mkString("_") +
                           "_" + x._3._1.toString.replace(",", "_") + "_" + x._3._2.toString.replace(",", "_"))
@@ -262,7 +220,6 @@ object KernelGenerator {
                   }).flatten
 
                   println(s"Generating ${potential_expressions.size} kernels")
-                  //println("possible Expressions: " + potential_expressions)
 
                   val hashes = SaveOpenCL(topFolder, low_level_hash,
                     high_level_hash, settings, potential_expressions)
@@ -276,7 +233,7 @@ object KernelGenerator {
                     logger.warn(t.toString)
                 }
               //})
-            }
+
           } catch {
             case t: Throwable =>
               logger.warn(t.toString)
