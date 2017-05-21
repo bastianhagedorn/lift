@@ -96,8 +96,19 @@ object KernelGenerator {
 
       val inputArgument = input.value.get
 
-      topFolder = Paths.get(inputArgument).toString
+      //was:
+      //topFolder = Paths.get(inputArgument).toString
+      //println("topFolder: " + topFolder)
 
+      var lambdaPath = Paths.get(inputArgument).toString //new
+      var highLevelName = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getFileName
+      println("highLevelName: " + highLevelName)
+
+      topFolder = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.toString.stripSuffix("Lower")
+
+      /*
+      Scala files zu erzeugen interessiert uns erstmal nicht.
+      Sollte man das hier komplett löschen? Vielleicht wollen wir ja später doch Scala Code erzeugen :D
       lambdaFilename = topFolder + "Scala/lambdaFile"
 
       if (generateScala.value.isDefined) {
@@ -108,6 +119,7 @@ object KernelGenerator {
           s"mkdir -p ${topFolder}Scala".!
         }
       }
+      */
 
       settings = ParseSettings(settingsFile.value)
 
@@ -116,12 +128,24 @@ object KernelGenerator {
 
       // list all the high level expression
       val all_files = Source.fromFile(s"$topFolder/index").getLines().toList
+      println("all_files: " + all_files)
       val highLevelCount = all_files.size
 
       val parentFolder = Paths.get(topFolder).toAbsolutePath.getParent
 
       var expr_counter = 0
-      var filename = all_files.last
+
+
+      var filename = ""
+
+      //find corresponding HighLevel Exp.
+      all_files.foreach(path => {
+        if (Paths.get(path.mkString).getFileName.toString == highLevelName.toString) {
+          filename = path
+          logger.info(s"corresponding HighLevelExp at path: $filename")
+        }
+      })
+
       //for every HighLevelExp:
       //all_files.foreach(filename => {
 
