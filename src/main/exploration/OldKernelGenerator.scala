@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.typesafe.scalalogging.Logger
 import exploration.ExpressionFilter.Status.Success
 import exploration.ParameterSearch.SubstitutionMap
-import exploration.TunerRewrite.parser
+import .parser
 import ir.ast.{Expr, FunCall, Lambda}
 import ir.{Type, TypeChecker}
 import lift.arithmetic.{ArithExpr, Cst}

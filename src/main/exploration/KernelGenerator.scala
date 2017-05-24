@@ -62,7 +62,7 @@ object KernelGenerator {
 
   private val localSize = parser.option[NDRange](List("ls", "localSize"), "n",
     "Comma separated local sizes"){
-    (s,opt)=>
+    (s,_)=>
       //take the first 3 values, try to convert them to number and fill ones if there were less than 3 values
       val localSizes = s.split(',').take(3).map(x=>x.toInt).padTo(3,1)
       NDRange(localSizes(0),localSizes(1),localSizes(2))
@@ -70,17 +70,29 @@ object KernelGenerator {
 
   private val globalSize = parser.option[NDRange](List("gs", "globalSize"), "n",
     "Comma separated local sizes"){
-    (s,opt)=>
+    (s,_)=>
       val localSizes = s.split(',').take(3).map(x=>x.toInt).padTo(3,1)
       NDRange(localSizes(0),localSizes(1),localSizes(2))
   }
 
+  private val vars = parser.option[Seq[ArithExpr]](List("vars"), "vars",
+    "Comma separated vars"){
+    (s,_) =>
+      //try parse all comma seperated values as ArithExpr
+      s.split(',').map(x=>ArithExpr.IntToCst(x.toInt))
+  }
+
+
+
 
 
   def main(args: Array[String]): Unit = {
-
-
     parser.parse(args)
+
+    //Es sollte geprüft werden, ob die Anzahl der gelesenen vars zum Ausdruck passt
+    //Es sollte geprüft werden, ob überhaupt vars übergeben wurden.
+
+    //gleiches für LS/GS
 
     val inputArgument = input.value.get
 
@@ -90,6 +102,7 @@ object KernelGenerator {
     val lowLevelFactory = Eval.getMethod(lambdaStr)
 
     //Diese sollen eingelesen werden:
+    //Werte stehen in vars.value.get
     val tuningWerte = Array[ArithExpr](1024, 32)
     val lambda = lowLevelFactory(tuningWerte)
 
