@@ -163,6 +163,7 @@ object OldKernelGenerator {
 
             var all_substitution_tables: Seq[SubstitutionMap] = ParameterSearch(high_level_expr)
 
+            //Erstmal nur ein Ding generieren
             all_substitution_tables = all_substitution_tables.dropRight(all_substitution_tables.size - 1)
 
             val substitutionCount = all_substitution_tables.size

@@ -1,34 +1,17 @@
 package exploration
 
-import java.io.{File, IOException}
+import java.io.{File, FileWriter, PrintWriter}
 import java.nio.file.{Files, Paths}
 
 import com.typesafe.scalalogging.Logger
-import exploration.KernelGenerator.{parser, readFromFile}
-import exploration.ParameterSearch.SubstitutionMap
-import ir.ArrayTypeWSWC
-import ir.ast.{Join, Pad, Pad3D, Slide3D, \, fun}
-import opencl.executor.{Eval, Execute}
+import ir.ast.Lambda
+import opencl.executor._
 import opencl.generator.NDRange
 import org.clapper.argot._
 
 import scala.io.Source
 import scala.util.Random
-import lift.arithmetic.{ArithExpr, Cst}
-import opencl.ir.pattern._
-import opencl.ir.{Float, add, id}
-
-//vom StencilTest
-import ir._
-import ir.ast.Pad.BoundaryFun
-import ir.ast._
-import lift.arithmetic.{SizeVar, StartFromRange, Var}
-import opencl.executor._
-import opencl.ir._
-import opencl.ir.pattern.{MapGlb, _}
-import org.junit.Assert._
-import org.junit.Assume.assumeFalse
-import org.junit._
+import lift.arithmetic.ArithExpr
 
 
 
@@ -78,7 +61,7 @@ object KernelGenerator {
   private val vars = parser.option[Seq[ArithExpr]](List("vars"), "vars",
     "Comma separated vars"){
     (s,_) =>
-      //try parse all comma seperated values as ArithExpr
+      //try to parse all comma seperated values as ArithExpr
       s.split(',').map(x=>ArithExpr.IntToCst(x.toInt))
   }
 
@@ -96,38 +79,73 @@ object KernelGenerator {
 
     val inputArgument = input.value.get
 
-    //we need the relative path from topfolder to the lambda
     var lambdaPath = Paths.get(inputArgument).toAbsolutePath.toString
     val lambdaStr = readFromFile(lambdaPath)
     val lowLevelFactory = Eval.getMethod(lambdaStr)
 
-    //Diese sollen eingelesen werden:
-    //Werte stehen in vars.value.get
-    val tuningWerte = Array[ArithExpr](1024, 32)
+    var tuningWerte = vars.value.getOrElse(Seq[ArithExpr]()).toArray
     val lambda = lowLevelFactory(tuningWerte)
 
-
-    println("lambdaStr: " + lambdaStr)
-    println("lambda: " + lambda)
-
-
+    //randomData muss aus dem passenden JSON gelesen werden
     val randomData = Seq.fill(1024)(Random.nextFloat()).toArray
 
 
-    Executor.loadLibrary()
-    println("Initialize the executor")
-    Executor.init()
+    val generateKernel = true
+    if (generateKernel) {
+      println("generating Kernel")
+      val lowLevelName = Paths.get(inputArgument).getFileName
+      val highLevelName = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getFileName
+      val outputPath = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.getParent + "/bestKernel.cl"
+      generateAndSaveKernel(lambda, lowLevelName.toString, highLevelName.toString, outputPath)
+    } else {
+      //initialize the Executor
+      Executor.loadLibrary()
+      Executor.init()
+      //start Execution
+      val (output: Array[Float], time) = Execute(localSize.value.getOrElse(NDRange(1,1,1)), globalSize.value.getOrElse(NDRange(1,1,1)), (true, true))(lambda, randomData)
+      println("Kernel time: " + time)
 
-    //Hier müssen wir mit der Angabe der GS und LS noch schauen, dass wir die auch aus den eingaben holen
-    val (output: Array[Float], time) = Execute(1,1,1,32,1,1,(true,true))(lambda, randomData)
-    //nach def von Execute.Scala sollte das eig so gehen, klappt aber nicht...
-    //val (output: Array[Float], time) = Execute(localSize, globalSize, (true, true))(lambda, randomData)
+      val outputPath = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.getParent + "/atfCcfg/" + "costfile.txt"
+      //convert time from seconds to nanoseconds and write to atf costfile
+      writeToFile(outputPath, (time * 1000000000).toInt.toString)
+    }
 
-    println("time: " + time)
   }
 
   def readFromFile(filename: String) =
     Source.fromFile(filename).mkString
 
+  def writeToFile(filePath: String, s: String): Unit = {
+    val file = new File(filePath)
+    //file.mkdirs()
+    val fw = new FileWriter(file, false)
+    val pw = new PrintWriter(fw)
+    try pw.write(s) finally pw.close()
+  }
+
+  def generateAndSaveKernel(lambda:Lambda, lowLevelHash:String, highLevelHash:String, outputPath:String) = {
+
+    //evtl. lieber SaveOpenCL benutzen, aber das ist komplex zu initialisiern ^^
+    //andererseits ist der viel zu aufgeblasen
+    //val possibleExp = Seq(lambda, vars.value.get, (NDRange(1,1,1), NDRange(1,1,1)))
+    //SaveOpenCL(Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.toString.stripSuffix("Lower"), lowLevelName.toString, highLevelName.toString, null, possibleExp)
+
+    //aus SaveOpenCL geklaut:
+    //kernel bauen
+    val compiled = Compile(lambda, localSize.value.getOrElse(NDRange(1,1,1)), globalSize.value.getOrElse(NDRange(1,1,1)))
+    val kernel =
+      s"""
+         |// Substitutions: ${vars.value.get}
+         |// Local sizes: ${localSize.value.getOrElse(NDRange(1,1,1))}
+         |// Global sizes: ${globalSize.value.getOrElse(NDRange(1,1,1))}
+         |// High-level hash: $highLevelHash
+         |// Low-level hash: $lowLevelHash
+         |
+         |$compiled
+         |""".stripMargin
+
+    //kernel Speichern
+    writeToFile(outputPath, kernel)
+  }
 
 }
