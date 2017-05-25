@@ -83,7 +83,9 @@ object KernelGenerator {
     val lambdaStr = readFromFile(lambdaPath)
     val lowLevelFactory = Eval.getMethod(lambdaStr)
 
-    var tuningWerte = vars.value.getOrElse(Seq[ArithExpr]()).toArray
+    var tuningWerte = vars.value.getOrElse(Seq.empty[ArithExpr]).toArray
+    //TODO die LowLevelFactory wird sehr wütend, wenn man ihr zu wenig Werte gibt.
+    //     Fehler Abfangen und Nutzer mitteilen, das die Anzahl der Parameter nicht stimmt.
     val lambda = lowLevelFactory(tuningWerte)
 
     //randomData muss aus dem passenden JSON gelesen werden
@@ -105,7 +107,9 @@ object KernelGenerator {
       val (output: Array[Float], time) = Execute(localSize.value.getOrElse(NDRange(1,1,1)), globalSize.value.getOrElse(NDRange(1,1,1)), (true, true))(lambda, randomData)
       println("Kernel time: " + time)
 
-      val outputPath = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.getParent + "/atfCcfg/" + "costfile.txt"
+      val outputPath = System.getProperty("user.dir") + "costfile.txt"
+      //val outputPath = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.getParent + "/atfCcfg/" + "costfile.txt"
+
       //convert time from seconds to nanoseconds and write to atf costfile
       writeToFile(outputPath, (time * 1000000000).toInt.toString)
     }
