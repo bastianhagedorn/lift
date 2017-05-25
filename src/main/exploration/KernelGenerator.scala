@@ -65,6 +65,10 @@ object KernelGenerator {
       s.split(',').map(x=>ArithExpr.IntToCst(x.toInt))
   }
 
+  private val generateKernel = parser.flag[Boolean](List("execute","executeKernel"),
+    "Shall we execute the Kernel or generate the openCL code?"){
+    (s,_)=>s
+  }
 
 
 
@@ -91,29 +95,29 @@ object KernelGenerator {
     //randomData muss aus dem passenden JSON gelesen werden
     val randomData = Seq.fill(1024)(Random.nextFloat()).toArray
 
-
-    val generateKernel = true
-    if (generateKernel) {
+    if (generateKernel.value.getOrElse(false)) {
       println("generating Kernel")
       val lowLevelName = Paths.get(inputArgument).getFileName
       val highLevelName = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getFileName
       val outputPath = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.getParent + "/bestKernel.cl"
       generateAndSaveKernel(lambda, lowLevelName.toString, highLevelName.toString, outputPath)
     } else {
-      //initialize the Executor
-      Executor.loadLibrary()
-      Executor.init()
-      //start Execution
-      val (output: Array[Float], time) = Execute(localSize.value.getOrElse(NDRange(1,1,1)), globalSize.value.getOrElse(NDRange(1,1,1)), (true, true))(lambda, randomData)
-      println("Kernel time: " + time)
-
-      val outputPath = System.getProperty("user.dir") + "costfile.txt"
-      //val outputPath = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.getParent + "/atfCcfg/" + "costfile.txt"
-
-      //convert time from seconds to nanoseconds and write to atf costfile
-      writeToFile(outputPath, (time * 1000000000).toInt.toString)
+      val time = Int.MaxValue
+      try {
+        //initialize the Executor
+        Executor.loadLibrary()
+        Executor.init()
+        //start Execution
+        val (output: Array[Float], time) = Execute(localSize.value.getOrElse(NDRange(1, 1, 1)), globalSize.value.getOrElse(NDRange(1, 1, 1)), (true, true))(lambda, randomData)
+        println("Kernel time: " + time)
+      }
+      //we don't want to catch exceptions but we want to always write the costfile!
+      finally{
+        val outputPath = System.getProperty("user.dir") + "/costfile.txt"
+        //convert time from seconds to nanoseconds and write to atf costfile
+        writeToFile(outputPath, (time * 1000000000).toInt.toString)
+      }
     }
-
   }
 
   def readFromFile(filename: String) =
