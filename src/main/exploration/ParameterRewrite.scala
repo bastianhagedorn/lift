@@ -134,6 +134,8 @@ object ParameterRewrite {
 
             val combinations = settings.inputCombinations
 
+            println("combinations: " + combinations)
+
             val st =
               if (combinations.isDefined &&
                   combinations.get.head.length == vars.length)
@@ -142,6 +144,8 @@ object ParameterRewrite {
                 createValueMap(high_level_expr_orig)
 
             val sizesForFilter = st.values.toSeq
+            println("sizesForFilter: " + sizesForFilter)
+
 
             val high_level_expr = replaceInputTypes(high_level_expr_orig, st)
 

@@ -129,6 +129,7 @@ object KernelGenerator {
       //we don't want to catch exceptions but we want to always write the costfile!
       finally{
         val outputPath = System.getProperty("user.dir") + "/costfile.txt"
+
         //convert time from seconds to nanoseconds and write to atf costfile
         writeToFile(outputPath, time.toString)
       }
