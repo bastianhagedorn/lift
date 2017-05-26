@@ -102,20 +102,22 @@ object KernelGenerator {
       val outputPath = Paths.get(inputArgument).toAbsolutePath.getParent.getParent.getParent.getParent.getParent + "/bestKernel.cl"
       generateAndSaveKernel(lambda, lowLevelName.toString, highLevelName.toString, outputPath)
     } else {
-      val time = Int.MaxValue
+      var time = Int.MaxValue
       try {
         //initialize the Executor
         Executor.loadLibrary()
         Executor.init()
         //start Execution
-        val (output: Array[Float], time) = Execute(localSize.value.getOrElse(NDRange(1, 1, 1)), globalSize.value.getOrElse(NDRange(1, 1, 1)), (true, true))(lambda, randomData)
-        println("Kernel time: " + time)
+        val (output: Array[Float], kernelTime) = Execute(localSize.value.getOrElse(NDRange(1, 1, 1)), globalSize.value.getOrElse(NDRange(1, 1, 1)), (true, true))(lambda, randomData)
+        println("Kernel time: " + kernelTime)
+        //output in microseconds
+        time = (kernelTime * 1000000).toInt
       }
       //we don't want to catch exceptions but we want to always write the costfile!
       finally{
         val outputPath = System.getProperty("user.dir") + "/costfile.txt"
         //convert time from seconds to nanoseconds and write to atf costfile
-        writeToFile(outputPath, (time * 1000000000).toInt.toString)
+        writeToFile(outputPath, time.toString)
       }
     }
   }
