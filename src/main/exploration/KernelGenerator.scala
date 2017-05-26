@@ -9,8 +9,10 @@ import opencl.executor._
 import opencl.generator.NDRange
 import org.clapper.argot._
 
+import scala.collection
 import scala.io.Source
 import scala.util.Random
+import scala.util.parsing.json
 import lift.arithmetic.ArithExpr
 
 
@@ -105,8 +107,19 @@ object KernelGenerator {
       var time = Int.MaxValue
       try {
         //initialize the Executor
+
+
+        //Read platform and device for execution from config file at home/.lift/environment.json
+        val config = readFromFile(System.getProperty("user.home") + "/.lift/environment.json")
+        val jsonFile = json.JSON.parseFull(config)
+
+        val platform = jsonFile.get.asInstanceOf[Map[String, Any]]("OpenCL").asInstanceOf[Map[String, Any]]("Platform").asInstanceOf[String]
+        val device = jsonFile.get.asInstanceOf[Map[String, Any]]("OpenCL").asInstanceOf[Map[String, Any]]("Device").asInstanceOf[String]
+
+        println("starting on platform: " + platform + ", device: " + device)
+
         Executor.loadLibrary()
-        Executor.init()
+        Executor.init(platform.toInt, device.toInt)
         //start Execution
         val (output: Array[Float], kernelTime) = Execute(localSize.value.getOrElse(NDRange(1, 1, 1)), globalSize.value.getOrElse(NDRange(1, 1, 1)), (true, true))(lambda, randomData)
         println("Kernel time: " + kernelTime)
