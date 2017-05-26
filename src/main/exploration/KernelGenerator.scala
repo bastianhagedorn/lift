@@ -72,6 +72,12 @@ object KernelGenerator {
     (s,_)=>s
   }
 
+  private val envConf = parser.option[Map[String,Any]](List("env"), "env",
+    "the path of the environment conf."){
+    (s,_) =>
+      json.JSON.parseFull(readFromFile(s)).get.asInstanceOf[Map[String,Any]]
+  }
+
 
 
 
@@ -89,7 +95,7 @@ object KernelGenerator {
     val lambdaStr = readFromFile(lambdaPath)
     val lowLevelFactory = Eval.getMethod(lambdaStr)
 
-    var tuningWerte = vars.value.getOrElse(Seq.empty[ArithExpr]).toArray
+    var tuningWerte = vars.value.getOrElse(Seq.empty[ArithExpr])
     //TODO die LowLevelFactory wird sehr wütend, wenn man ihr zu wenig Werte gibt.
     //     Fehler Abfangen und Nutzer mitteilen, das die Anzahl der Parameter nicht stimmt.
     val lambda = lowLevelFactory(tuningWerte)
@@ -105,39 +111,56 @@ object KernelGenerator {
       generateAndSaveKernel(lambda, lowLevelName.toString, highLevelName.toString, outputPath)
     } else {
       var time = Int.MaxValue
+      val ls = localSize.value.getOrElse(NDRange(1, 1, 1))
+      val gs = globalSize.value.getOrElse(NDRange(1, 1, 1))
+
       try {
         //initialize the Executor
 
-
         //Read platform and device for execution from config file at home/.lift/environment.json
-        val config = readFromFile(System.getProperty("user.home") + "/.lift/environment.json")
-        val jsonFile = json.JSON.parseFull(config)
+        val jsonFile = envConf.value.getOrElse(
+          json.JSON.parseFull(
+            readFromFile(System.getProperty("user.home") + "/.lift/environment.json")
+          ).get.asInstanceOf[Map[String,Any]]
+        )
 
-        val platform = jsonFile.get.asInstanceOf[Map[String, Any]]("OpenCL").asInstanceOf[Map[String, Any]]("Platform").asInstanceOf[String]
-        val device = jsonFile.get.asInstanceOf[Map[String, Any]]("OpenCL").asInstanceOf[Map[String, Any]]("Device").asInstanceOf[String]
+        val platform = jsonFile("OpenCL").asInstanceOf[Map[String, Any]]("Platform").asInstanceOf[String]
+        val device = jsonFile("OpenCL").asInstanceOf[Map[String, Any]]("Device").asInstanceOf[String]
+
+       // val platform = jsonFile.get.asInstanceOf[Map[String, Any]]("OpenCL").asInstanceOf[Map[String, Any]]("Platform").asInstanceOf[String]
+       // val device = jsonFile.get.asInstanceOf[Map[String, Any]]("OpenCL").asInstanceOf[Map[String, Any]]("Device").asInstanceOf[String]
 
         println("starting on platform: " + platform + ", device: " + device)
 
         Executor.loadLibrary()
         Executor.init(platform.toInt, device.toInt)
         //start Execution
-        val (output: Array[Float], kernelTime) = Execute(localSize.value.getOrElse(NDRange(1, 1, 1)), globalSize.value.getOrElse(NDRange(1, 1, 1)), (true, true))(lambda, randomData)
+        val (output: Array[Float], kernelTime) = Execute(ls, gs, (true, true))(lambda, randomData)
         println("Kernel time: " + kernelTime)
         //output in microseconds
         time = (kernelTime * 1000000).toInt
       }
       //we don't want to catch exceptions but we want to always write the costfile!
       finally{
-        val outputPath = System.getProperty("user.dir") + "/costfile.txt"
+        val outputPath = System.getProperty("user.dir")
 
         //convert time from seconds to nanoseconds and write to atf costfile
-        writeToFile(outputPath, time.toString)
+        writeToFile(outputPath + "/costfile.txt", time.toString)
+        val line = (List(time,gs.x,gs.y,gs.z,ls.x,ls.y,ls.z)++tuningWerte).map(_.toString)
+        appendToCsv(outputPath+"/times.csv", line)
       }
     }
   }
 
   def readFromFile(filename: String) =
     Source.fromFile(filename).mkString
+
+  def appendToCsv(filePath: String, line:Seq[String]): Unit = {
+    val fw = new FileWriter(new File(filePath), true)
+    fw.write(line.mkString(",")+"\n")
+    fw.close()
+  }
+
 
   def writeToFile(filePath: String, s: String): Unit = {
     val file = new File(filePath)
