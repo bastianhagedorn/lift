@@ -7,15 +7,19 @@ import com.typesafe.scalalogging.Logger
 import exploration.KernelGenerator.parser
 import exploration.ParameterRewrite.readFromFile
 import ir.TypeChecker
-import ir.ast.Lambda
-import lift.arithmetic.ArithExpr
+import ir.ast.{Expr, Lambda}
+import lift.arithmetic.{?, ArithExpr, Var}
 import opencl.executor._
 import opencl.generator.NDRange
 import org.clapper.argot._
+import rewriting.utils.Utils
 
+import scala.collection.immutable.ListMap
 import scala.io.Source
 import scala.util.Random
 import scala.util.parsing.json
+import scala.util.parsing.json.JSONObject
+
 
 
 /**
@@ -54,25 +58,40 @@ object LambdaAnalyser {
     val inputArgument = input.value.get
 
     var lambdaPath = Paths.get(inputArgument).toAbsolutePath.toString
-    val lambdaStr = readLambdaFromFile(lambdaPath)
+    val lambdaStr = readFromFile(lambdaPath)
 
     println("lambdaStr: " + lambdaStr)
-    //val lowLevelFactory = Eval.getMethod(lambdaStr)
+    val lowLevelFactory = Eval.getMethod(lambdaStr)
+
+    val lambda = lowLevelFactory(Seq(Var(), Var()))
+
+    val typeChecker = TypeChecker(lambda)
+    println("typeChecker : " + typeChecker)
+
+    println("lambda: " + lambda)
+
+    println("params: " + lambda.params)
+
+    val tunableNodes = Utils.findTunableNodes(lambda)
+    println("tunableNode: " + tunableNodes)
 
 
+    var tunableVars = Expr.visitLeftToRight(Set[Var]())(lambda.body, (e, s) =>
+      e.t.varList.toSet[Var] ++ s
+    ).filterNot(elem => lambda.getVarsInParams() contains elem)
 
-    val test = TypeChecker(lambdaStr)
-    println("test: " + test)
-
-
-    //val tunableVars = Expr.visitLeftToRight(Set[Var]())(lambda.body, (e, s) =>
-    //  e.t.varList.toSet[Var] ++ s
-    //).filterNot(elem => lambda.getVarsInParams() contains elem)
+    println("tunables: " + tunableVars)
 
 
-    //var tuningWerte = vars.value.getOrElse(Seq.empty[ArithExpr]).toArray
-    //     Fehler Abfangen und Nutzer mitteilen, das die Anzahl der Parameter nicht stimmt.
-    //val lambda = lowLevelFactory(tuningWerte)
+    //JSON generieren
+    val interval = ListMap[String,Any](("type","int"), ("from", "1"), ("to", "1024"))
+    val tunableVars2 = ListMap[String,Any](("name","v__1"), ("interval", JSONObject(interval)))
+
+    //var lm = ListMap[String,JSONObject]()
+    //lm+=("tunables" -> JSONObject(tunableVars2))
+
+    print("endJson: " + JSONObject(tunableVars2).toString())
+
 
   }
 
