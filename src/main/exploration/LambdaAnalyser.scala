@@ -8,7 +8,7 @@ import exploration.KernelGenerator.parser
 import exploration.ParameterRewrite.readFromFile
 import ir.TypeChecker
 import ir.ast.{Expr, Lambda}
-import lift.arithmetic.{?, ArithExpr, Var}
+import lift.arithmetic.{?, ArithExpr, Range, RangeAdd, RangeUnknown, Var}
 import opencl.executor._
 import opencl.generator.NDRange
 import org.clapper.argot._
@@ -17,7 +17,7 @@ import rewriting.utils.Utils
 import scala.collection.immutable.ListMap
 import scala.io.Source
 import scala.util.Random
-import scala.util.parsing.json
+import scala.util.parsing.json.JSONArray
 import scala.util.parsing.json.JSONObject
 
 
@@ -39,14 +39,14 @@ object LambdaAnalyser {
       sValue
   }
 
-  private val input = parser.parameter[String]("input",
+  private val input = parser.parameter[File]("input",
     "Input file containing the lambda to use for rewriting",
     optional = false) {
     (s, _) =>
       val file = new File(s)
       if (!file.exists)
         parser.usage("Input file \"" + s + "\" does not exist")
-      s
+      file
   }
 
 
@@ -55,25 +55,23 @@ object LambdaAnalyser {
 
     parser.parse(args)
 
-    val inputArgument = input.value.get
-
-    var lambdaPath = Paths.get(inputArgument).toAbsolutePath.toString
+    var lambdaPath = input.value.get.toPath.toAbsolutePath.toString
     val lambdaStr = readFromFile(lambdaPath)
 
-    println("lambdaStr: " + lambdaStr)
+    //println("lambdaStr: " + lambdaStr)
     val lowLevelFactory = Eval.getMethod(lambdaStr)
 
     val lambda = lowLevelFactory(Seq(Var(), Var()))
 
     val typeChecker = TypeChecker(lambda)
-    println("typeChecker : " + typeChecker)
+    //println("typeChecker : " + typeChecker)
 
-    println("lambda: " + lambda)
+    //println("lambda: " + lambda)
 
     println("params: " + lambda.params)
 
     val tunableNodes = Utils.findTunableNodes(lambda)
-    println("tunableNode: " + tunableNodes)
+    println("tunableNode0: " + tunableNodes(0))
 
 
     var tunableVars = Expr.visitLeftToRight(Set[Var]())(lambda.body, (e, s) =>
@@ -82,15 +80,40 @@ object LambdaAnalyser {
 
     println("tunables: " + tunableVars)
 
+    var tunableVarList = tunableVars.toList
 
-    //JSON generieren
-    val interval = ListMap[String,Any](("type","int"), ("from", "1"), ("to", "1024"))
-    val tunableVars2 = ListMap[String,Any](("name","v__1"), ("interval", JSONObject(interval)))
+    //JSON aus vars generieren
+    var jsonList = List[JSONObject]()
+
+    tunableVars.foreach(
+      v=>{
+        println("name:"+v.name)
+        println(v.toString)
+        val range = if(v.range==RangeUnknown) RangeAdd(1,1025,1) else v.range
+        jsonList = JSONObject(ListMap[String,Any](
+          ("name",v.toString),
+          ("interval", JSONObject(
+            ListMap[String,Any](
+              ("type","int"),
+              ("from", range.min),
+              ("to", range.max)
+            )
+          ))
+        ))::jsonList
+      }
+    )
+
+    val output = new File(input.value.get.getParentFile,input.value.get.getName+".json")
+    println(output)
+    val writer = new PrintWriter(new FileWriter(output,false))
+    try writer.write(JSONArray(jsonList).toString()) finally writer.close()
+
+
 
     //var lm = ListMap[String,JSONObject]()
     //lm+=("tunables" -> JSONObject(tunableVars2))
 
-    print("endJson: " + JSONObject(tunableVars2).toString())
+    print("endJson: " + JSONArray(jsonList).toString())
 
 
   }
