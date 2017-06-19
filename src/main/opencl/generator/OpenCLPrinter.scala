@@ -16,12 +16,20 @@ object OpenCLPrinter {
       case Pow(b, ex) =>
         "(int)pow((float)" + toString(b) + ", " + toString(ex) + ")"
       case Log(b, x) => "(int)log"+b+"((float)"+toString(x)+")"
-      case Prod(es) => "(" + es.foldLeft("1")( (s: String, e: ArithExpr) => {
-        s + (e match {
-          case Pow(b, Cst(-1)) => " / (" + toString(b) + ")"
-          case _ => " * " + toString(e)
+      case Prod(es) =>
+        val (denTerms, numTerms) = es.partition({
+          case Pow(_, Cst(-1)) => true
+          case _ => false
         })
-      } ).drop(4) + ")" // drop(4) removes the initial "1 * "
+        val num = toStringProd(numTerms)
+        if (denTerms.isEmpty) s"($num)"
+        else {
+          val den = toStringProd(denTerms.map({
+            case Pow(e, Cst(-1)) => e
+            case _ => throw new IllegalArgumentException()
+          }))
+          s"(($num)/($den))"
+        }
       case Sum(es) => "(" + es.map(toString).reduce( _ + " + " + _  ) + ")"
       case Mod(a,n) => "(" + toString(a) + " % " + toString(n) + ")"
       case of: OclFunction => of.toOCLString
@@ -34,6 +42,12 @@ object OpenCLPrinter {
           s"${toString(i.t)} : ${toString(i.e)} )"
       case _ => throw new NotPrintableExpression(e.toString)
     }
+  }
+  
+  def toStringProd(terms: Seq[ArithExpr]): String = {
+    val res = terms.foldLeft("1")((s, e) => s + " * " + toString(e))
+    if (terms.isEmpty) "1"
+    else res.drop(4) // Drop "1 * "
   }
 
   def toString(t: Type, seenArray: Boolean = false) : String = {
@@ -195,12 +209,7 @@ class OpenCLPrinter {
 
   private def print(l: VectorLiteral): Unit = {
     print(s"(${l.t})(")
-    var c = 0
-    l.vs.foreach( v => {
-      print(v)
-      c = c+1
-      if (c != l.vs.length) { print(", ") }
-    })
+    printList(l.vs, ", ")
     print(")")
   }
 
@@ -266,10 +275,7 @@ class OpenCLPrinter {
 
   private def print(f: FunctionCall): Unit = {
     print(f.name + "(")
-    f.args.foreach(x => {
-      print(x)
-      if(!x.eq(f.args.last)) print(", ")
-    })
+    printList(f.args, ", ")
     print(")")
   }
 
@@ -298,12 +304,9 @@ class OpenCLPrinter {
 
     if (f.kernel) sb ++= "void"
     else sb ++= OpenCLPrinter.toString(f.ret)
-    sb ++= s" ${f.name}("
-    f.params.foreach(x => {
-      print(x)
-      if(!x.eq(f.params.last)) sb ++= ", "
-    })
-    sb ++= ")"
+    print(s" ${f.name}(")
+    printList(f.params, ", ")
+    print(")")
 
     if(f.kernel)
       sb ++= "{ \n" +
@@ -405,6 +408,17 @@ class OpenCLPrinter {
   private def print(b: Barrier): Unit = println (b.mem.addressSpace match {
     case GlobalMemory => "barrier(CLK_GLOBAL_MEM_FENCE);"
     case LocalMemory => "barrier(CLK_LOCAL_MEM_FENCE);"
+
+    case collection: AddressSpaceCollection
+      if collection.containsAddressSpace(GlobalMemory) &&
+        !collection.containsAddressSpace(LocalMemory) =>
+      "barrier(CLK_GLOBAL_MEM_FENCE);"
+
+    case collection: AddressSpaceCollection
+      if collection.containsAddressSpace(LocalMemory) &&
+        !collection.containsAddressSpace(GlobalMemory) =>
+      "barrier(CLK_LOCAL_MEM_FENCE);"
+
     case _ => "barrier(CLK_LOCAL_MEM_FENCE | CLK_GLOBAL_MEM_FENCE);"
   })
 
@@ -475,10 +489,19 @@ class OpenCLPrinter {
 
   private def print(s: StructConstructor): Unit = {
     print(s"(${OpenCLPrinter.toString(s.t)}){")
-    s.args.foreach(x => {
-      print(x)
-      if(!x.eq(s.args.last)) print(", ")
-    })
+    printList(s.args, ", ")
     print("}")
+  }
+  
+  /**
+   * Helper function for printing separated lists
+   * `printList([a, b, c], ",")  ==  "a,b,c"`
+   */
+  private def printList(args: Seq[OclAstNode], sep: String): Unit = {
+    args.init.foreach(a => {
+      print(a)
+      print(sep)
+    })
+    print(args.last)
   }
 }

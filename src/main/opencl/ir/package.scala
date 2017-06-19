@@ -1,6 +1,6 @@
 package opencl
 
-import _root_.ir.{Type, TupleType}
+import _root_.ir.{Type, TupleType, ScalarType}
 import _root_.ir.ast.{UserFun, Value}
 
 import scala.language.implicitConversions
@@ -12,13 +12,16 @@ package object ir {
     UserFun(name, "x", "return x;", ty, ty)
   
   def equality(ty: Type, name: String = "equality"): UserFun =
-    UserFun(name, Array("x", "y"), "return x == y;", Seq(ty, ty), Int)
+    UserFun(name, Array("x", "y"), "return x == y;", Seq(ty, ty), Bool)
   
   def first(leftTy: Type, rightTy: Type, name: String="fst"): UserFun =
     UserFun(name, Array("x", "y"), "return x;", Seq(leftTy, rightTy), leftTy)
   
-  def max(ty: Type, name: String="maximum"): UserFun =
+  def max(ty: ScalarType, name: String="maximum"): UserFun =
     UserFun(name, Array("x", "y"), "return x > y ? x : y;", Seq(ty, ty), ty)
+
+  def add(ty: ScalarType, name: String = "add"): UserFun =
+    UserFun(name, Array("x", "y"), "return x + y;", Seq(ty, ty), ty)
   
   // commonly used user functions
 
@@ -44,9 +47,6 @@ package object ir {
 
   val idFF = UserFun("idFF", "x", "{ return x; }", TupleType(Float, Float), TupleType(Float, Float))
   
-  // A polymorphic version of the identity function
-  def id(ty: Type): UserFun = UserFun("id", "x", "return x;", ty, ty)
-
   val absAndSumUp = UserFun("absAndSumUp", Array("acc", "x"), "{ return acc + fabs(x); }",
                             Seq(Float, Float), Float)
 
@@ -102,10 +102,10 @@ package object ir {
   // Logical
   
   val or: UserFun =
-    UserFun("or", Array("x", "y"), "return x | y;", Seq(Int, Int), Int)
+    UserFun("or", Array("x", "y"), "return x | y;", Seq(Bool, Bool), Bool)
   
   val not: UserFun =
-    UserFun("not", "x", "return !x;", Int, Int)
+    UserFun("not", "x", "return !x;", Bool, Bool)
 
   implicit def IntToValue(i: Int): Value = Value(i.toString, opencl.ir.Int)
 
