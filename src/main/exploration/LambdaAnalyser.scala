@@ -5,13 +5,14 @@ import java.nio.file.Paths
 
 import com.typesafe.scalalogging.Logger
 import exploration.KernelGenerator.parser
-import exploration.ParameterRewrite.{readLambdaFromFile, settings, _}
+import exploration.ParameterRewrite.{logger, parser, readLambdaFromFile, settings, _}
 import exploration.ParameterSearch.SubstitutionMap
 import ir.TypeChecker
-import ir.ast.{Expr, Lambda}
+import ir.ast.{Expr, FunCall, Lambda}
 import lift.arithmetic._
 import opencl.executor._
 import opencl.generator.NDRange
+import opencl.ir.pattern._
 import org.clapper.argot._
 import rewriting.utils.Utils
 
@@ -21,6 +22,7 @@ import scala.util.Random
 import scala.util.parsing.json.JSONArray
 import scala.util.parsing.json.JSONObject
 
+import ExpressionFilter.Status.Success
 
 
 /**
@@ -50,7 +52,17 @@ object LambdaAnalyser {
       file
   }
 
+  private val settingsFile = parser.option[String](List("f", "file"), "name",
+    "The settings file to use."
+  ) {
+    (s, _) =>
+      val file = new File(s)
+      if (!file.exists)
+        parser.usage(s"Settings file $file doesn't exist.")
+      s
+  }
 
+  private var settings = Settings()
 
   def main(args: Array[String]): Unit = {
 
@@ -99,6 +111,9 @@ object LambdaAnalyser {
 
 
 
+    //herausfinden, in wie vielen Dimensionen getuned werden soll
+
+
 
 
     val lambdaStr = readFromFile(lambdaPath)
@@ -106,7 +121,8 @@ object LambdaAnalyser {
     //println("lambdaStr: " + lambdaStr)
     val lowLevelFactory = Eval.getMethod(lambdaStr)
 
-    val lambda = lowLevelFactory(Seq(Var(), Var()))
+    val lambda = lowLevelFactory(Seq(Var(), Var(), Var(), Var(), Var()))
+
 
     val typeChecker = TypeChecker(lambda)
     //println("typeChecker : " + typeChecker)
@@ -123,28 +139,42 @@ object LambdaAnalyser {
       e.t.varList.toSet[Var] ++ s
     ).filterNot(elem => lambda.getVarsInParams() contains elem)
 
-    println("tunables: " + tunableVars)
 
-    var tunableVarList = tunableVars.toList
 
-    //JSON aus vars generieren
+    var numDimension = maxDimension(lambda)
+    val dims = (0 to numDimension).toList
+
+    //add the GS and LS to be tuned
+    var gsls = (for (dim <- dims) yield ("gs"+dim, Map(("range", Var().range)))).toMap[String, Map[String, Object]]
+    gsls = gsls ++ (for (dim <- dims) yield ("ls"+dim, Map(("range", Var().range), ("divides", "gs"+dim)))).toMap[String, Map[String, Object]]
+    gsls = gsls ++ (for (v <- tunableVars) yield (v.toString, Map(("range", v.range)))).toMap[String, Map[String, Object]]
+
+    //generate json from vars:
     var jsonList = List[JSONObject]()
-
-    tunableVars.foreach(
+    gsls.foreach(
       v=>{
-        println("name:"+v.name)
-        println(v.toString)
-        val range = if(v.range==RangeUnknown) RangeAdd(1,1025,1) else v.range
-        jsonList = JSONObject(ListMap[String,Any](
-          ("name",v.toString),
-          ("interval", JSONObject(
-            ListMap[String,Any](
-              ("type","int"),
-              ("from", range.min),
-              ("to", range.max)
-            )
-          ))
-        ))::jsonList
+        val range = if(v._2==RangeUnknown) RangeAdd(1,1025,1) else v._2
+
+        var fields = ListMap[String,Any](
+          ("name",v._1.toString)
+        )
+
+        v._2.foreach(
+          restrictions => {
+            fields = if (restrictions._2.isInstanceOf[Range]) {
+              val range = if((restrictions._2.asInstanceOf[Range])==RangeUnknown) RangeAdd(1,1025,1) else (restrictions._2.asInstanceOf[Range])
+              fields + (("interval", JSONObject(
+                ListMap[String,Any](
+                  ("type","int"),
+                  ("from", range.min),
+                  ("to", range.max))
+              ))
+                )
+            } else fields + ((restrictions._1, restrictions._2))
+          }
+        )
+        val newJSONObject = JSONObject(fields)
+        jsonList = newJSONObject::jsonList
       }
     )
 
@@ -153,13 +183,7 @@ object LambdaAnalyser {
     val writer = new PrintWriter(new FileWriter(output,false))
     try writer.write(JSONArray(jsonList).toString()) finally writer.close()
 
-
-
-    //var lm = ListMap[String,JSONObject]()
-    //lm+=("tunables" -> JSONObject(tunableVars2))
-
     print("endJson: " + JSONArray(jsonList).toString())
-
 
   }
 
@@ -175,5 +199,29 @@ object LambdaAnalyser {
     val fw = new FileWriter(file, false)
     val pw = new PrintWriter(fw)
     try pw.write(s) finally pw.close()
+  }
+
+  private def maxDimension(expr: Lambda): Int = {
+    var usedDimensions: Set[Int] = Set()
+    Expr.visit(expr.body,
+      {
+        case FunCall(MapGlb(dim, _), _) =>
+          usedDimensions += dim
+
+        case FunCall(MapLcl(dim, _), _) =>
+          usedDimensions += dim
+
+        case FunCall(MapWrg(dim, _), _) =>
+          usedDimensions += dim
+
+        case FunCall(MapAtomLcl(dim, _, _), _) =>
+          usedDimensions += dim
+
+        case FunCall(MapAtomWrg(dim, _, _), _) =>
+          usedDimensions += dim
+
+        case _ =>
+      }, (_) => Unit)
+    usedDimensions.max
   }
 }
