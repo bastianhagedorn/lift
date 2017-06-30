@@ -101,21 +101,23 @@ object LambdaAnalyser {
 
     TypeChecker(high_level_expr)
 
+
+    //Weitere Parameter mit Ranges und ggf. Constraints auslesen
+    val tunables:Map[String,Map[String,Any]] = ParameterSearch2(high_level_expr)
+
+
+/*
     val all_substitution_tables: Seq[SubstitutionMap] = ParameterSearch(high_level_expr)
 
     println("List of all valid parameter sets")
     println(all_substitution_tables)
     println()
     //end of new stuff!
-
+*/
 
 
 
     //herausfinden, in wie vielen Dimensionen getuned werden soll
-
-
-
-
     val lambdaStr = readFromFile(lambdaPath)
 
     //println("lambdaStr: " + lambdaStr)
@@ -123,7 +125,7 @@ object LambdaAnalyser {
 
     val lambda = lowLevelFactory(Seq(Var(), Var(), Var(), Var(), Var()))
 
-
+  /*
     val typeChecker = TypeChecker(lambda)
     //println("typeChecker : " + typeChecker)
 
@@ -131,29 +133,26 @@ object LambdaAnalyser {
 
     println("params: " + lambda.params)
 
-    val tunableNodes = Utils.findTunableNodes(lambda)
-    println("tunableNode0: " + tunableNodes(0))
-
-
     var tunableVars = Expr.visitLeftToRight(Set[Var]())(lambda.body, (e, s) =>
       e.t.varList.toSet[Var] ++ s
     ).filterNot(elem => lambda.getVarsInParams() contains elem)
+  */
 
 
-
-    var numDimension = maxDimension(lambda)
+    val numDimension = maxDimension(lambda)
     val dims = (0 to numDimension).toList
 
     //add the GS and LS to be tuned
     var gsls = (for (dim <- dims) yield ("gs"+dim, Map(("range", Var().range)))).toMap[String, Map[String, Object]]
     gsls = gsls ++ (for (dim <- dims) yield ("ls"+dim, Map(("range", Var().range), ("divides", "gs"+dim)))).toMap[String, Map[String, Object]]
-    gsls = gsls ++ (for (v <- tunableVars) yield (v.toString, Map(("range", v.range)))).toMap[String, Map[String, Object]]
+    //gsls = gsls ++ (for (v <- tunableVars) yield (v.toString, Map(("range", v.range)))).toMap[String, Map[String, Object]]
 
     //generate json from vars:
     var jsonList = List[JSONObject]()
-    gsls.foreach(
+    (gsls ++ tunables).foreach(
       v=>{
-        val range = if(v._2==RangeUnknown) RangeAdd(1,1025,1) else v._2
+        //never used...
+        //val range = if(v._2==RangeUnknown) RangeAdd(1,1025,1) else v._2
 
         var fields = ListMap[String,Any](
           ("name",v._1.toString)
