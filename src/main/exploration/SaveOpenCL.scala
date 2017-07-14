@@ -88,10 +88,10 @@ class SaveOpenCL(
 
 
 
-    //if(ParameterRewrite.exploreNDRange.value.isDefined)
-    ranges match { case (l, g) => local = l; global = g }
-    //else
-    //  InferNDRange(lambda) match { case (l, g) => local = l; global = g }
+    if(ParameterRewrite.exploreNDRange.value.isDefined)
+      ranges match { case (l, g) => local = l; global = g }
+    else
+      InferNDRange(lambda) match { case (l, g) => local = l; global = g }
     //Das ist Quatsch! ...glaube ich...
     //NDRange has already been infered, it makes no sense to do it again...
     println("using GS: " + global + " LS: " + local)
