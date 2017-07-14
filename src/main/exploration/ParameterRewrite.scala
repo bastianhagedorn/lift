@@ -193,8 +193,7 @@ object ParameterRewrite {
                       val rangeList = if (exploreNDRange.value.isDefined)
                         computeValidNDRanges(expr)
                       else
-                        Seq((NDRange(32,1,1),NDRange(32,1,1)))
-                        //Seq(InferNDRange(expr))
+                        Seq(InferNDRange(expr))
 
                         println("rangeList: "+rangeList)
 
@@ -204,11 +203,10 @@ object ParameterRewrite {
                         //ExpressionFilter discards all LS, but "?", just disable it
                         val filtered: Seq[(Lambda, Seq[ArithExpr], (NDRange, NDRange))] =
                           rangeList.flatMap {ranges =>
-                            //if (ExpressionFilter(expr, ranges, settings.searchParameters) == Success)
-                            //println("Expression Filter sagt: " +ExpressionFilter(expr, ranges, settings.searchParameters))
-                            Some((low_level_factory(vars ++ params), params, ranges))
-                            //else
-                            //  None
+                            if (ExpressionFilter(expr, ranges, settings.searchParameters) == Success)
+                              Some((low_level_factory(vars ++ params), params, ranges))
+                            else
+                              None
                           }
                         //println("filtered: " + filtered)
 
