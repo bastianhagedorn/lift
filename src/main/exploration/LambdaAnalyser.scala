@@ -217,19 +217,15 @@ object LambdaAnalyser {
     val tunableNodes = Utils.findTunableNodes(lambda)
 
     // from that, isolate only the splits/slides
-    val splits = tunableNodes.collect({
+    val splits = tunableNodes.collect{
       case FunCall(Split(cs), x) => (cs, x.t.asInstanceOf[ArrayType with Size].size)
       // step has to divide len - (size - step)
       case FunCall(Slide(size, step), x) => (step, x.t.asInstanceOf[ArrayType with Size].size - (size-step))
       case FunCall(Gather(ReorderWithStride(s)), x) if s.isInstanceOf[Var] => (s, x.t.asInstanceOf[ArrayType with Size].size)
-    })
+    }
 
-    // TODO not quite sure but I think it's better to use a mutable map here and make it immutable later on.
-    // Otherwise we have to create a new map eacht time we want to "insert" a value.
-    // maybe the way to go is simply not using foreach?
     val result = scala.collection.mutable.Map.empty[String,Map[String,Object]]
-    splits.foreach(split =>
-      split match {
+    splits.foreach{
         // If the dividend is a constant, create range and divides constraint based on that value.
         case (v:Var, Cst(dividend)) =>
           result += v.toString -> Map[String, Object](
@@ -239,13 +235,15 @@ object LambdaAnalyser {
         // If the dividend is a variable, create a divides constraint which implicitly limits the range to the range of the dividend.
         case (v: Var, dividend: Var) =>
           result += v.toString -> Map[String, Object](
-            "range"->RangeAdd(1,dividend,1),
             "divides" -> dividend.toString
           )
+        case (Cst(divisor), variableDividend:Var) =>
+          println(s"found some fixed constant that should divide a variable $divisor, $variableDividend")
+
         case (x,y) =>
           println(s"Not a tunable $x, $y")
       }
-    )
+
 
 
     result.toMap
