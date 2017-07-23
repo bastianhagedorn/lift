@@ -132,6 +132,8 @@ object LambdaAnalyser {
     val numDimension = maxDimension(lambda)
     val dims = (0 to numDimension).toList
 
+    print("Dimension des Kernels: " + numDimension)
+
     //add the GS and LS to be tuned
     var gsls = (for (dim <- dims) yield ("gs" + dim, Map(("range", Var().range)))).toMap[String, Map[String, Object]]
     gsls = gsls ++ (for (dim <- dims) yield ("ls" + dim, Map(("range", Var().range), ("divides", "gs" + dim)))).toMap[String, Map[String, Object]]
@@ -172,7 +174,7 @@ object LambdaAnalyser {
     val writer = new PrintWriter(new FileWriter(output, false))
     try writer.write(JSONArray(jsonList).toString()) finally writer.close()
 
-    print("endJson: " + JSONArray(jsonList).toString())
+    println("endJson: " + JSONArray(jsonList).toString())
 
   }
 
@@ -210,6 +212,9 @@ object LambdaAnalyser {
 
       case _ =>
     }, (_) => Unit)
+
+    println("used Dimensions: " + usedDimensions)
+
     usedDimensions.max
   }
 

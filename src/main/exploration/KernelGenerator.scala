@@ -101,7 +101,15 @@ object KernelGenerator {
     val lambda = lowLevelFactory(tuningWerte)
 
     //randomData muss aus dem passenden JSON gelesen werden
+
+    //stencil1D
     val randomData = Seq.fill(1024)(Random.nextFloat()).toArray
+
+
+    /* for convolution2D
+    val randomData = Seq.fill(1024)(Seq.fill(1024)(Random.nextFloat()).toArray).toArray
+    val randomData2 = Seq.fill(1024)(Random.nextFloat()).toArray
+    */
 
     if (generateKernel.value.getOrElse(false)) {
       println("generating Kernel")
@@ -135,7 +143,12 @@ object KernelGenerator {
         Executor.loadLibrary()
         Executor.init(platform.toInt, device.toInt)
         //start Execution
+
+        //stencil:
         val (output: Array[Float], kernelTime) = Execute(ls, gs, (true, true))(lambda, randomData)
+
+        // for convolution2D:
+        //val (output: Array[Float], kernelTime) = Execute(ls, gs, (true, true))(lambda, randomData, randomData2)
         println("Kernel time: " + kernelTime)
         //output in microseconds
         time = (kernelTime * 1000000).toInt
