@@ -111,8 +111,15 @@ object OpenCLGenerator extends Generator {
 
   private[generator] def isFixedSizeLocalMemory: (TypedOpenCLMemory) => Boolean = {
     mem => try {
-      mem.mem.size.eval
-      mem.mem.addressSpace == LocalMemory
+      val local = mem.mem.addressSpace == LocalMemory
+      val evaluable = mem.mem.size.isEvaluable
+      var onlyTP = true
+      mem.mem.size.varList.foreach {
+        case t: TuningParameter =>
+        case _ => onlyTP = false
+      }
+
+      local && (evaluable || onlyTP)
     } catch {
       case NotEvaluableException() => false
     }
@@ -218,7 +225,7 @@ class OpenCLGenerator extends Generator {
 
     tupleTypes.foreach(globalBlock += OpenCLAST.TypeDef(_))
 
-    // pass 2: find and generate user and group functions
+    // pass 2: find and generate user functions
     generateUserFunctions(f.body).foreach(globalBlock += _)
 
     // pass 3: generate the
@@ -327,7 +334,10 @@ class OpenCLGenerator extends Generator {
     val allVars = Kernel.memory.map(_.mem.size.varList)
       .filter(_.nonEmpty).flatten.distinct
     // partition into iteration variables and all others variables
-    val (iterateVars, vars) = allVars.partition(_.name == Iterate.varName)
+    val (iterateVars, otherVars) = allVars.partition(_.name == Iterate.varName)
+
+    // filter out tuning parameters to not have them as kernel args
+    val vars = otherVars.filter(!_.isInstanceOf[TuningParameter])
 
     val attribute =
       if (localSize.forall(_.isEvaluable) &&
@@ -365,10 +375,18 @@ class OpenCLGenerator extends Generator {
 
     kernel.body += OpenCLAST.Comment("Static local memory")
     Kernel.staticLocalMemory.foreach(x =>
-      kernel.body +=
-        OpenCLAST.VarDecl(x.mem.variable, x.t,
-          addressSpace = x.mem.addressSpace,
-          length = (x.mem.size /^ Type.getMaxAllocatedSize(Type.getBaseType(x.t))).eval))
+      if(x.mem.size.varList.isEmpty) {
+        kernel.body +=
+          OpenCLAST.VarDecl(x.mem.variable, x.t,
+            addressSpace = x.mem.addressSpace,
+            length = (x.mem.size /^ Type.getMaxAllocatedSize(Type.getBaseType(x.t))).eval)
+        // use new type for TPs
+      } else {
+        kernel.body +=
+          OpenCLAST.VarDecl2(x.mem.variable, x.t,
+            addressSpace = x.mem.addressSpace,
+            length = (x.mem.size /^ Type.getMaxAllocatedSize(Type.getBaseType(x.t))).toString)
+      })
 
     kernel.body += OpenCLAST.Comment("Typed Value memory")
     typedValueMems.foreach(x =>

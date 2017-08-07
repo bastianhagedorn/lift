@@ -233,10 +233,10 @@ case class ArrayType(elemT: Type) extends Type {
 object ArrayType {
   def checkSizeOrCapacity(s: String, ae: ArithExpr) : Unit = {
     // TODO: remove the need to check for unknown (but this is used currently in a few places)
-    if (ae != ? & ae.sign != Sign.Positive)
+    //if (ae != ? & ae.sign != Sign.Positive)
     // TODO: turn this back into an error (eventually)
     //throw new TypeException("Length must be provably positive! (len="+len+")")
-      println(s"Warning: $s must be provably positive! (len=$ae)")
+     // println(s"Warning: $s must be provably positive! (len=$ae)")
 
     if (ae.isEvaluable) {
       val length = ae.evalDouble
@@ -574,6 +574,11 @@ object Type {
     val size = getAllocatedSize(t)
     val map = TypeVar.getTypeVars(size).map(tv => (tv, tv.range.max)).toMap
     ArithExpr.substitute(size, map.toMap)
+  }
+
+  def getElementCount(t: Type) : ArithExpr = {
+    val lengths = Type.getLengths(t)
+    lengths.reduce(_ * _)
   }
 
   def getMaxLength(t: Type) : ArithExpr = {
