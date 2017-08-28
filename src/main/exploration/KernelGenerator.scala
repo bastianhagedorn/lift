@@ -1,6 +1,6 @@
 package exploration
 
-import java.io.{File, FileWriter, PrintWriter}
+import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.nio.file.{Files, Paths}
 
 import com.typesafe.scalalogging.Logger
@@ -67,7 +67,7 @@ object KernelGenerator {
       s.split(',').map(x=>ArithExpr.IntToCst(x.toInt))
   }
 
-  private val generateKernel = parser.flag[Boolean](List("execute","executeKernel"),
+  private val generateKernel = parser.flag[Boolean](List("noExecute","generateKernel"),
     "Shall we execute the Kernel or generate the openCL code?"){
     (s,_)=>s
   }
@@ -82,6 +82,9 @@ object KernelGenerator {
 
 
   def main(args: Array[String]): Unit = {
+    val stats=new scala.collection.mutable.MutableList[String]
+    val t0 = logTime()
+    var tStart=t0
     parser.parse(args)
 
     //Es sollte geprüft werden, ob die Anzahl der gelesenen vars zum Ausdruck passt
@@ -102,6 +105,8 @@ object KernelGenerator {
 
     //randomData muss aus dem passenden JSON gelesen werden
 
+    tStart = logTime(stats,tStart) // internal init time
+
     //stencil1D
     val randomData = Seq.fill(1024)(Random.nextFloat()).toArray
 
@@ -110,6 +115,8 @@ object KernelGenerator {
     val randomData = Seq.fill(1024)(Seq.fill(1024)(Random.nextFloat()).toArray).toArray
     val randomData2 = Seq.fill(1024)(Random.nextFloat()).toArray
     */
+
+    tStart = logTime(stats,tStart) // random data setup
 
     if (generateKernel.value.getOrElse(false)) {
       println("generating Kernel")
@@ -138,20 +145,24 @@ object KernelGenerator {
        // val platform = jsonFile.get.asInstanceOf[Map[String, Any]]("OpenCL").asInstanceOf[Map[String, Any]]("Platform").asInstanceOf[String]
        // val device = jsonFile.get.asInstanceOf[Map[String, Any]]("OpenCL").asInstanceOf[Map[String, Any]]("Device").asInstanceOf[String]
 
+        tStart = logTime(stats,tStart) // reading environment
+
         println("starting on platform: " + platform + ", device: " + device)
 
         Executor.loadLibrary()
         Executor.init(platform.toInt, device.toInt)
         //start Execution
 
+        tStart = logTime(stats,tStart) // init executor
         //stencil:
         val (output: Array[Float], kernelTime) = Execute(ls, gs, (true, true))(lambda, randomData)
-
+        logTime(stats,tStart) // compile and execute the specialized kernel
         // for convolution2D:
         //val (output: Array[Float], kernelTime) = Execute(ls, gs, (true, true))(lambda, randomData, randomData2)
         println("Kernel time: " + kernelTime)
         //output in microseconds
         time = (kernelTime * 1000000).toInt
+        writeExploreStats(inputArgument,s"$gs,$ls",stats,t0) //we don't want stats when the KernelGen crashed.
       }
       //we don't want to catch exceptions but we want to always write the costfile!
       finally{
@@ -161,7 +172,7 @@ object KernelGenerator {
         writeToFile(outputPath + "/costfile.txt", time.toString)
         val line = (List(time,gs.x,gs.y,gs.z,ls.x,ls.y,ls.z)++tuningWerte).map(_.toString)
         appendToCsv(outputPath+"/times.csv", line)
-      }
+      }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
     }
   }
 
@@ -206,6 +217,30 @@ object KernelGenerator {
 
     //kernel Speichern
     writeToFile(outputPath, kernel)
+  }
+
+  def logTime():Long = System.nanoTime
+  def logTime(statLine:scala.collection.mutable.MutableList[String], tStart:Long):Long = {
+    statLine += (tStart-System.nanoTime).toString //why would one want to do this! Well I don't care, it's possible!
+    System.nanoTime
+  }
+
+  def writeExploreStats(expression:String,kernelConfig:String,statLine:scala.collection.mutable.MutableList[String], t0:Long):Unit = {
+    val outPath = Paths get "./kernelGeneratorStats.csv"
+    val wasExistent=Files exists outPath
+
+    val out = new BufferedWriter(new FileWriter(outPath.toFile,true))
+    try{
+      if(!wasExistent){
+        print(s"file $outPath did not exist")
+        out write s"expresion,gs0,gs1,gs2,ls0,ls1,ls2,init,random data setup,reading environment,init executor,generate compile and execute,total\n"
+      }
+      out write s"$expression,$kernelConfig,"
+      out write statLine.mkString(",")
+      out write "\n"
+
+    }
+    finally out.close
   }
 
 }
