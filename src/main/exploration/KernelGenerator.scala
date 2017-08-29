@@ -82,8 +82,8 @@ object KernelGenerator {
 
 
   def main(args: Array[String]): Unit = {
-    val stats=new scala.collection.mutable.MutableList[String]
     val t0 = logTime()
+    val stats=new scala.collection.mutable.MutableList[String]
     var tStart=t0
     parser.parse(args)
 
@@ -96,17 +96,19 @@ object KernelGenerator {
 
     var lambdaPath = Paths.get(inputArgument).toAbsolutePath.toString
     val lambdaStr = readFromFile(lambdaPath)
-    val lowLevelFactory = Eval.getMethod(lambdaStr)
-
     var tuningWerte = vars.value.getOrElse(Seq.empty[ArithExpr])
+    tStart = logTime(stats,tStart) // internal init time read command line and configs and so on
+
+
+    val lowLevelFactory = Eval.getMethod(lambdaStr)
+    tStart = logTime(stats,tStart) // eval the factory
+
     //TODO die LowLevelFactory wird sehr wütend, wenn man ihr zu wenig Werte gibt.
     //     Fehler Abfangen und Nutzer mitteilen, das die Anzahl der Parameter nicht stimmt.
     val lambda = lowLevelFactory(tuningWerte)
+    tStart = logTime(stats,tStart) // run low level factory
 
     //randomData muss aus dem passenden JSON gelesen werden
-
-    tStart = logTime(stats,tStart) // internal init time
-
     //stencil1D
     val randomData = Seq.fill(1024)(Random.nextFloat()).toArray
 
@@ -221,11 +223,12 @@ object KernelGenerator {
 
   def logTime():Long = System.nanoTime
   def logTime(statLine:scala.collection.mutable.MutableList[String], tStart:Long):Long = {
-    statLine += (tStart-System.nanoTime).toString //why would one want to do this! Well I don't care, it's possible!
+    statLine += ((System.nanoTime-tStart)*1e-3).toString //why would one want to do this! Well I don't care, it's possible!
     System.nanoTime
   }
 
   def writeExploreStats(expression:String,kernelConfig:String,statLine:scala.collection.mutable.MutableList[String], t0:Long):Unit = {
+    logTime(statLine,t0)
     val outPath = Paths get "./kernelGeneratorStats.csv"
     val wasExistent=Files exists outPath
 
@@ -233,7 +236,7 @@ object KernelGenerator {
     try{
       if(!wasExistent){
         print(s"file $outPath did not exist")
-        out write s"expresion,gs0,gs1,gs2,ls0,ls1,ls2,init,random data setup,reading environment,init executor,generate compile and execute,total\n"
+        out write s"expresion,gs0,gs1,gs2,ls0,ls1,ls2,init,eval factory,run factory,random data setup,reading environment,init executor,generate compile and execute,total\n"
       }
       out write s"$expression,$kernelConfig,"
       out write statLine.mkString(",")
